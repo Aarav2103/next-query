@@ -1,5 +1,5 @@
 
-import env from "@/env";
+import env from "@/app/env";
 
 import {Avatars, Client, Databases, Storage, Users} from "node-appwrite"
 
