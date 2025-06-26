@@ -1,63 +1,96 @@
-import { databases } from "@/models/server/config";
-import { db, questionCollection } from "@/models/name";
+import { databases, users } from "@/models/server/config";
+import { answerCollection, db, voteCollection, questionCollection } from "@/models/name";
 import { Query } from "node-appwrite";
-import React, { Suspense } from "react";
+import React, { Suspense } from "react"; // ✅ Import Suspense
 import Link from "next/link";
 import ShimmerButton from "@/components/magicui/shimmer-button";
 import QuestionCard from "@/components/QuestionCard";
+import { UserPrefs } from "@/store/Auth";
 import Pagination from "@/components/Pagination";
-import SearchWrapper from "./SearchWrapper"; // updated
+import Search from "./Search"; // keep as-is if Search is inside same folder
 
-const Page = async () => {
-    const questions = await databases.listDocuments(db, questionCollection, [
-        Query.limit(25),
-    ]);
+const Page = async ({
+  searchParams,
+}: {
+  searchParams: { page?: string; tag?: string; search?: string };
+}) => {
+  searchParams.page ||= "1";
 
-    const filteredQuestions = questions.documents.filter(
-        (ques) => ques.authorId && ques.authorId !== ""
+  const queries = [
+    Query.orderDesc("$createdAt"),
+    Query.offset((+searchParams.page - 1) * 25),
+    Query.limit(25),
+  ];
+
+  if (searchParams.tag) queries.push(Query.equal("tags", searchParams.tag));
+  if (searchParams.search)
+    queries.push(
+      Query.or([
+        Query.search("title", searchParams.search),
+        Query.search("content", searchParams.search),
+      ])
     );
 
-    return (
-        <div className="container mx-auto px-4 pb-20 pt-36">
-            <div className="mb-10 flex items-center justify-between">
-                <h1 className="text-3xl font-bold">All Questions</h1>
-                <Link href="/questions/ask">
-                    <ShimmerButton className="shadow-2xl">
-                        <span className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-lg">
-                            Ask a question
-                        </span>
-                    </ShimmerButton>
-                </Link>
-            </div>
+  const questions = await databases.listDocuments(db, questionCollection, queries);
 
-            {/* Wrap search in Suspense */}
-            <div className="mb-4">
-                <Suspense fallback={<div>Loading search...</div>}>
-                    <SearchWrapper />
-                </Suspense>
-            </div>
+  questions.documents = await Promise.all(
+    questions.documents.map(async ques => {
+      const [author, answers, votes] = await Promise.all([
+        users.get<UserPrefs>(ques.authorId),
+        databases.listDocuments(db, answerCollection, [
+          Query.equal("questionId", ques.$id),
+          Query.limit(1),
+        ]),
+        databases.listDocuments(db, voteCollection, [
+          Query.equal("type", "question"),
+          Query.equal("typeId", ques.$id),
+          Query.limit(1),
+        ]),
+      ]);
 
-            <div className="mb-4">
-                <p>{filteredQuestions.length} questions</p>
-            </div>
-            <div className="mb-4 space-y-6">
-                {filteredQuestions.length === 0 ? (
-                    <div className="text-gray-400">No questions found.</div>
-                ) : (
-                    filteredQuestions.map((ques) => (
-                        <QuestionCard
-                            key={ques.$id}
-                            ques={{
-                                ...ques,
-                                author: ques.author || { name: "Unknown" },
-                            }}
-                        />
-                    ))
-                )}
-            </div>
-            <Pagination total={filteredQuestions.length} limit={25} />
-        </div>
-    );
+      return {
+        ...ques,
+        totalAnswers: answers.total,
+        totalVotes: votes.total,
+        author: {
+          $id: author.$id,
+          reputation: author.prefs.reputation,
+          name: author.name,
+        },
+      };
+    })
+  );
+
+  return (
+    <div className="container mx-auto px-4 pb-20 pt-36">
+      <div className="mb-10 flex items-center justify-between">
+        <h1 className="text-3xl font-bold">All Questions</h1>
+        <Link href="/questions/ask">
+          <ShimmerButton className="shadow-2xl">
+            <span className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-lg">
+              Ask a question
+            </span>
+          </ShimmerButton>
+        </Link>
+      </div>
+
+      <div className="mb-4">
+        <Suspense fallback={<div>Loading search bar...</div>}>
+          <Search />
+        </Suspense>
+      </div>
+
+      <div className="mb-4">
+        <p>{questions.total} questions</p>
+      </div>
+      <div className="mb-4 max-w-3xl space-y-6">
+        {questions.documents.map(ques => (
+          <QuestionCard key={ques.$id} ques={ques} />
+        ))}
+      </div>
+      <Pagination total={questions.total} limit={25} />
+    </div>
+  );
 };
 
 export default Page;
