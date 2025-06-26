@@ -1,19 +1,18 @@
 import { databases } from "@/models/server/config";
 import { db, questionCollection } from "@/models/name";
 import { Query } from "node-appwrite";
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import ShimmerButton from "@/components/magicui/shimmer-button";
 import QuestionCard from "@/components/QuestionCard";
 import Pagination from "@/components/Pagination";
-import Search from "./Search";
+import SearchWrapper from "./SearchWrapper"; // updated
 
 const Page = async () => {
     const questions = await databases.listDocuments(db, questionCollection, [
         Query.limit(25),
     ]);
 
-    // Filter out questions with missing authorId or author
     const filteredQuestions = questions.documents.filter(
         (ques) => ques.authorId && ques.authorId !== ""
     );
@@ -30,9 +29,14 @@ const Page = async () => {
                     </ShimmerButton>
                 </Link>
             </div>
+
+            {/* Wrap search in Suspense */}
             <div className="mb-4">
-                <Search />
+                <Suspense fallback={<div>Loading search...</div>}>
+                    <SearchWrapper />
+                </Suspense>
             </div>
+
             <div className="mb-4">
                 <p>{filteredQuestions.length} questions</p>
             </div>

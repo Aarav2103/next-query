@@ -1,3 +1,6 @@
+// src/models/server/storageSetup.ts
+'use server';
+
 import { Permission } from "node-appwrite";
 import { questionAttachmentBucket } from "../name";
 import { storage } from "./config";
