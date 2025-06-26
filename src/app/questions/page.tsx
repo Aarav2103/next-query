@@ -1,65 +1,21 @@
-import { databases, users } from "@/models/server/config";
-import { answerCollection, db, voteCollection, questionCollection } from "@/models/name";
+import { databases } from "@/models/server/config";
+import { db, questionCollection } from "@/models/name";
 import { Query } from "node-appwrite";
 import React from "react";
 import Link from "next/link";
 import ShimmerButton from "@/components/magicui/shimmer-button";
 import QuestionCard from "@/components/QuestionCard";
-import { UserPrefs } from "@/store/Auth";
 import Pagination from "@/components/Pagination";
 import Search from "./Search";
 
-const Page = async ({
-    searchParams,
-}: {
-    searchParams: { page?: string; tag?: string; search?: string };
-}) => {
-    searchParams.page ||= "1";
-
-    const queries = [
-        Query.orderDesc("$createdAt"),
-        Query.offset((+searchParams.page - 1) * 25),
+const Page = async () => {
+    const questions = await databases.listDocuments(db, questionCollection, [
         Query.limit(25),
-    ];
+    ]);
 
-    if (searchParams.tag) queries.push(Query.equal("tags", searchParams.tag));
-    if (searchParams.search)
-        queries.push(
-            Query.or([
-                Query.search("title", searchParams.search),
-                Query.search("content", searchParams.search),
-            ])
-        );
-
-    const questions = await databases.listDocuments(db, questionCollection, queries);
-    console.log("Questions", questions)
-
-    questions.documents = await Promise.all(
-        questions.documents.map(async ques => {
-            const [author, answers, votes] = await Promise.all([
-                users.get<UserPrefs>(ques.authorId),
-                databases.listDocuments(db, answerCollection, [
-                    Query.equal("questionId", ques.$id),
-                    Query.limit(1), // for optimization
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", ques.$id),
-                    Query.limit(1), // for optimization
-                ]),
-            ]);
-
-            return {
-                ...ques,
-                totalAnswers: answers.total,
-                totalVotes: votes.total,
-                author: {
-                    $id: author.$id,
-                    reputation: author.prefs.reputation,
-                    name: author.name,
-                },
-            };
-        })
+    // Filter out questions with missing authorId or author
+    const filteredQuestions = questions.documents.filter(
+        (ques) => ques.authorId && ques.authorId !== ""
     );
 
     return (
@@ -78,14 +34,24 @@ const Page = async ({
                 <Search />
             </div>
             <div className="mb-4">
-                <p>{questions.total} questions</p>
+                <p>{filteredQuestions.length} questions</p>
             </div>
-            <div className="mb-4 max-w-3xl space-y-6">
-                {questions.documents.map(ques => (
-                    <QuestionCard key={ques.$id} ques={ques} />
-                ))}
+            <div className="mb-4 space-y-6">
+                {filteredQuestions.length === 0 ? (
+                    <div className="text-gray-400">No questions found.</div>
+                ) : (
+                    filteredQuestions.map((ques) => (
+                        <QuestionCard
+                            key={ques.$id}
+                            ques={{
+                                ...ques,
+                                author: ques.author || { name: "Unknown" },
+                            }}
+                        />
+                    ))
+                )}
             </div>
-            <Pagination total={questions.total} limit={25} />
+            <Pagination total={filteredQuestions.length} limit={25} />
         </div>
     );
 };

@@ -7,10 +7,14 @@ import { Models } from "appwrite";
 import slugify from "@/utils/slugify";
 import { avatars } from "@/models/client/config";
 import convertDateToRelativeTime from "@/utils/relativeTime";
+import { storage } from "@/models/client/config"; 
 
 const QuestionCard = ({ ques }: { ques: Models.Document }) => {
     const [height, setHeight] = React.useState(0);
     const ref = React.useRef<HTMLDivElement>(null);
+    const imageUrl = ques.attachmentId
+    ? storage.getFileView("question-attachment", ques.attachmentId)
+    : null;
 
     React.useEffect(() => {
         if (ref.current) {
@@ -33,8 +37,15 @@ const QuestionCard = ({ ques }: { ques: Models.Document }) => {
                     href={`/questions/${ques.$id}/${slugify(ques.title)}`}
                     className="text-orange-500 duration-200 hover:text-orange-600"
                 >
-                    <h2 className="text-xl">{ques.title}</h2>
-                </Link>
+    <h2 className="text-xl">{ques.title}</h2>
+</Link>
+{imageUrl && (
+    <img
+        src={imageUrl.href}
+        alt="Question Attachment"
+        className="max-h-48 rounded-lg object-contain"
+    />
+)}
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                     {ques.tags.map((tag: string) => (
                         <Link

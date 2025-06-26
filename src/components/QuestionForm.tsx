@@ -44,7 +44,7 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
     const [formData, setFormData] = React.useState({
         title: String(question?.title || ""),
         content: String(question?.content || ""),
-        authorId: user?.$id,
+        authorId: user?.$id ?? "",
         tags: new Set((question?.tags || []) as string[]),
         attachment: null as File | null,
     });
@@ -84,23 +84,25 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
 
     const create = async () => {
         if (!formData.attachment) throw new Error("Please upload an image");
-
+    
         const storageResponse = await storage.createFile(
             questionAttachmentBucket,
             ID.unique(),
             formData.attachment
         );
-
+    
         const response = await databases.createDocument(db, questionCollection, ID.unique(), {
             title: formData.title,
             content: formData.content,
             authorId: formData.authorId,
             tags: Array.from(formData.tags),
             attachmentId: storageResponse.$id,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(), // <-- Add this line
         });
-
+    
         loadConfetti();
-
+    
         return response;
     };
 
@@ -127,16 +129,26 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
             authorId: formData.authorId,
             tags: Array.from(formData.tags),
             attachmentId: attachmentId,
+            updatedAt: new Date().toISOString(), // <-- Add this line
         });
 
         return response;
     };
 
+
+    if (!user) {
+        return (
+          <div className="text-center text-red-500 py-10">
+            Please log in to ask a question.
+          </div>
+        );
+      }
+
     const submit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
         // didn't check for attachment because it's optional in updating
-        if (!formData.title || !formData.content || !formData.authorId) {
+        if (!formData.title || !formData.content || !formData.authorId || formData.tags.size === 0) {
             setError(() => "Please fill out all fields");
             return;
         }
