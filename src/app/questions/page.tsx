@@ -1,7 +1,3 @@
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
-
 import { databases } from "@/models/server/config";
 import { db, questionCollection } from "@/models/name";
 import { Query } from "node-appwrite";
